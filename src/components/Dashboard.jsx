@@ -39,6 +39,11 @@ export default function Dashboard() {
     reason: "Routine command update",
   });
   const [message, setMessage] = useState("");
+  const [maintenanceReport, setMaintenanceReport] = useState({
+    alerts: [],
+    highest_severity: "NORMAL",
+    summary: "No predictive-maintenance data yet.",
+  });
 
   const metrics = useMemo(() => {
     const safe = segments.filter((segment) => segment.safety_status === "SAFE").length;
@@ -46,7 +51,8 @@ export default function Dashboard() {
       segments.length === 0
         ? 0
         : segments.reduce((sum, segment) => sum + segment.magnetic_field_microtesla, 0) / segments.length;
-    return { safe, avgField };
+    const watchOrWorse = segments.filter((segment) => segment.anomaly_severity && segment.anomaly_severity !== "NORMAL").length;
+    return { safe, avgField, watchOrWorse };
   }, [segments]);
 
   async function fetchSegments() {
@@ -63,6 +69,12 @@ export default function Dashboard() {
     });
     const payload = await response.json();
     setRecommendation(payload);
+  }
+
+  async function fetchMaintenance() {
+    const response = await fetch(`${API_BASE}/api/v1/maintenance/report`);
+    const payload = await response.json();
+    setMaintenanceReport(payload);
   }
 
   async function setWeatherOverride() {
@@ -107,11 +119,13 @@ export default function Dashboard() {
       }),
     });
     setMessage(successfulPerch ? "Success feedback recorded" : "Failure feedback recorded");
+    fetchMaintenance();
   }
 
   useEffect(() => {
     fetchSegments();
     fetchRecommendation();
+    fetchMaintenance();
     const telemetryTicker = setInterval(() => {
       setTelemetry((current) => ({
         ...current,
@@ -124,6 +138,7 @@ export default function Dashboard() {
     const stateTicker = setInterval(() => {
       fetchSegments();
       fetchRecommendation();
+      fetchMaintenance();
     }, 3500);
 
     return () => {
@@ -153,6 +168,13 @@ export default function Dashboard() {
       <article className="metric-card">
         <h3>Magnetic Induction Output</h3>
         <strong>{metrics.avgField.toFixed(2)} uT avg</strong>
+      </article>
+      <article className="metric-card">
+        <h3>Predictive Maintenance</h3>
+        <strong className={`severity-${maintenanceReport.highest_severity.toLowerCase()}`}>
+          {maintenanceReport.highest_severity}
+        </strong>
+        <p className="status-line">{metrics.watchOrWorse} span(s) on watch</p>
       </article>
 
       <article className="viz-card">
@@ -268,6 +290,21 @@ export default function Dashboard() {
             Record failed perch
           </button>
         </div>
+      </article>
+
+      <article className="control-card maintenance-card">
+        <h3>Anomaly Forecast</h3>
+        <p>{maintenanceReport.summary}</p>
+        <ul className="alert-list">
+          {(maintenanceReport.alerts || []).slice(0, 4).map((alert) => (
+            <li key={`${alert.entity_type}-${alert.entity_id}`}>
+              <strong className={`severity-${alert.severity.toLowerCase()}`}>
+                {alert.severity}
+              </strong>{" "}
+              {alert.entity_id}: {alert.predicted_issue}
+            </li>
+          ))}
+        </ul>
       </article>
 
       <article className="metric-card status-card">

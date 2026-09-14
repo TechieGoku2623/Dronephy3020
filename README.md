@@ -24,12 +24,17 @@ Full-stack platform for autonomous power-line inspection drones that can perch a
 - Self-adapting memory (`app/memory_engine.py`)
   - Drone-specific learning from success/failure outcomes
   - Charge-rate EMA and bounded scoring influence
+- Predictive maintenance (`app/maintenance_engine.py`)
+  - Battery-drain anomaly scoring from live telemetry
+  - Segment wear from thermal, harmonic, and failed-perch history
+  - Autonomous routing defers CRITICAL spans unless a human forces them
 - API routes (`app/main.py`)
   - `POST /api/v1/routing/next-perch`
   - `GET /api/v1/grid/segments`
   - `POST /api/v1/weather/override`
   - `POST /api/v1/control/command`
   - `POST /api/v1/memory/feedback`
+  - `GET /api/v1/maintenance/report`
   - `GET /api/v1/system/state`
 
 ### Frontend (React + Vite)
@@ -40,6 +45,7 @@ Full-stack platform for autonomous power-line inspection drones that can perch a
   - Interactive weather override controls
   - Human command panel
   - Memory feedback actions for online learning
+  - Predictive-maintenance severity and anomaly forecast
 
 ### Quality and orchestration
 - Test suite (`test_backend.py`) covering:
@@ -47,6 +53,8 @@ Full-stack platform for autonomous power-line inspection drones that can perch a
   - Haversine metrics
   - Harmonic edge cases
   - Memory adaptation and human control
+  - Predictive maintenance alerts
+  - Live next-perch sample recommendation
 - Runtime dependencies (`requirements.txt`)
 - One-command flow (`run.sh`) to:
   1. Run tests
@@ -72,6 +80,10 @@ You asked to add self-adapting memory, human control, and extra advancements inf
 4. **Transparent rationale output**
    - Recommendations include rationale strings for post-flight audit and regulator review.
 
+5. **Predictive maintenance / anomaly scoring**
+   - Fleet operators lose aircraft and spans to silent wear (battery fade, thermal cycling, clamp failures).
+   - Mitigation: score drones and segments continuously and pull CRITICAL assets out of autonomous perch selection.
+
 ## Industry challenges used in design decisions
 
 This architecture explicitly responds to common challenges seen across major drone operators:
@@ -88,6 +100,9 @@ This architecture explicitly responds to common challenges seen across major dro
 - **Power-line landing/perching risk under harmonics and wind (observed in in-contact inspection research):**
   - Mitigation: harmonic clamp-angle optimization + corona risk threshold + thermal and induction safety checks.
 
+- **Unplanned downtime from battery fade and hardware wear (common across inspection and delivery fleets):**
+  - Mitigation: predictive anomaly scoring plus routing penalties that keep degrading assets off the next perch.
+
 ## Quick start
 
 ```bash
@@ -97,3 +112,52 @@ python -m pip install -r requirements.txt
 
 - Backend: `http://localhost:8000`
 - Frontend: `http://localhost:3000`
+- OpenAPI docs: `http://localhost:8000/docs`
+
+## API usage
+
+Sample live routing call:
+
+```bash
+curl -s http://localhost:8000/api/v1/routing/next-perch \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "drone_id": "DRONE-001",
+    "latitude": 37.7712,
+    "longitude": -122.4444,
+    "battery_percentage": 76.0,
+    "consumption_rate_per_min": 1.1
+  }'
+```
+
+Record a mission outcome so memory and maintenance both learn:
+
+```bash
+curl -s http://localhost:8000/api/v1/memory/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "drone_id": "DRONE-001",
+    "segment_id": "SEG-B3",
+    "successful_perch": true,
+    "observed_charge_rate_pct_per_hr": 28.5
+  }'
+```
+
+Inspect predictive-maintenance alerts:
+
+```bash
+curl -s http://localhost:8000/api/v1/maintenance/report
+```
+
+Force a human override or emergency lockout:
+
+```bash
+curl -s http://localhost:8000/api/v1/control/command \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "operator_id": "ops-01",
+    "force_segment_id": "SEG-B3",
+    "emergency_lockout": false,
+    "reason": "Prefer low-risk maintenance corridor"
+  }'
+```
