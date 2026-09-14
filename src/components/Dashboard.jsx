@@ -11,10 +11,29 @@ function segmentColor(status) {
   return "#95a5a6";
 }
 
-function toCanvasPoint(lat, lon) {
-  const x = ((lon + 180) / 360) * 100;
-  const y = ((90 - lat) / 180) * 100;
+function toCanvasPoint(lat, lon, bounds) {
+  const width = Math.max(bounds.maxLon - bounds.minLon, 0.002);
+  const height = Math.max(bounds.maxLat - bounds.minLat, 0.002);
+  const x = ((lon - bounds.minLon) / width) * 88 + 6;
+  const y = ((bounds.maxLat - lat) / height) * 88 + 6;
   return { x, y };
+}
+
+function gridBounds(segments, telemetry) {
+  const lats = [telemetry.latitude];
+  const lons = [telemetry.longitude];
+  segments.forEach((entry) => {
+    lats.push(entry.segment.lat_start, entry.segment.lat_end);
+    lons.push(entry.segment.lon_start, entry.segment.lon_end);
+  });
+  const padLat = Math.max((Math.max(...lats) - Math.min(...lats)) * 0.2, 0.004);
+  const padLon = Math.max((Math.max(...lons) - Math.min(...lons)) * 0.2, 0.004);
+  return {
+    minLat: Math.min(...lats) - padLat,
+    maxLat: Math.max(...lats) + padLat,
+    minLon: Math.min(...lons) - padLon,
+    maxLon: Math.max(...lons) + padLon,
+  };
 }
 
 export default function Dashboard() {
@@ -151,7 +170,8 @@ export default function Dashboard() {
     fetchRecommendation();
   }, [telemetry.latitude, telemetry.longitude, telemetry.battery_percentage]);
 
-  const dronePoint = toCanvasPoint(telemetry.latitude, telemetry.longitude);
+  const bounds = useMemo(() => gridBounds(segments, telemetry), [segments, telemetry]);
+  const dronePoint = toCanvasPoint(telemetry.latitude, telemetry.longitude, bounds);
 
   return (
     <section className="dashboard-grid">
@@ -181,18 +201,25 @@ export default function Dashboard() {
         <h3>Vector Grid</h3>
         <svg viewBox="0 0 100 100" className="grid-canvas">
           {segments.map((entry) => {
-            const start = toCanvasPoint(entry.segment.lat_start, entry.segment.lon_start);
-            const end = toCanvasPoint(entry.segment.lat_end, entry.segment.lon_end);
+            const start = toCanvasPoint(entry.segment.lat_start, entry.segment.lon_start, bounds);
+            const end = toCanvasPoint(entry.segment.lat_end, entry.segment.lon_end, bounds);
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
             return (
-              <line
-                key={entry.segment.segment_id}
-                x1={start.x}
-                y1={start.y}
-                x2={end.x}
-                y2={end.y}
-                stroke={segmentColor(entry.safety_status)}
-                strokeWidth="1.6"
-              />
+              <g key={entry.segment.segment_id}>
+                <line
+                  x1={start.x}
+                  y1={start.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke={segmentColor(entry.safety_status)}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+                <text x={midX} y={midY - 1.6} textAnchor="middle" className="segment-label">
+                  {entry.segment.segment_id}
+                </text>
+              </g>
             );
           })}
           <circle cx={dronePoint.x} cy={dronePoint.y} r="1.8" fill="#00d1ff" />

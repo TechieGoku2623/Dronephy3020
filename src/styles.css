@@ -90,6 +90,12 @@ body {
   color: #cde5ff;
 }
 
+.segment-label {
+  fill: #d7e6ff;
+  font-size: 3.2px;
+  font-weight: 600;
+}
+
 label {
   display: block;
   margin-bottom: 0.65rem;
