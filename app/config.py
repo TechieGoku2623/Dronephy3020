@@ -56,6 +56,8 @@ class Settings:
     enforce_tenant_header: bool
     enable_rate_limit: bool
     rate_limit_per_minute: int
+    api_workers: int
+    api_timeout_seconds: int
     log_level: str
 
     @classmethod
@@ -75,6 +77,8 @@ class Settings:
         enforce_tenant_header = _parse_bool(os.getenv("GRIDOS_ENFORCE_TENANT_HEADER"), default=False)
         enable_rate_limit = _parse_bool(os.getenv("GRIDOS_ENABLE_RATE_LIMIT"), default=True)
         rate_limit_per_minute = int(os.getenv("GRIDOS_RATE_LIMIT_PER_MINUTE", "180"))
+        api_workers = int(os.getenv("GRIDOS_API_WORKERS", "2"))
+        api_timeout_seconds = int(os.getenv("GRIDOS_API_TIMEOUT_SECONDS", "60"))
         log_level = os.getenv("GRIDOS_LOG_LEVEL", "INFO").upper()
 
         return cls(
@@ -89,5 +93,7 @@ class Settings:
             enforce_tenant_header=enforce_tenant_header,
             enable_rate_limit=enable_rate_limit,
             rate_limit_per_minute=rate_limit_per_minute,
+            api_workers=api_workers,
+            api_timeout_seconds=api_timeout_seconds,
             log_level=log_level,
         )

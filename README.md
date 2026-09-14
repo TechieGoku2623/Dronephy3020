@@ -96,10 +96,14 @@ Core endpoints (tenant-aware):
 
 ## Production configuration
 
-Copy and edit:
+Generate a secure `.env` automatically:
 
 ```bash
-cp .env.example .env
+python3 scripts/generate_production_env.py \
+  --domain app.yourdomain.com \
+  --tenant-id yourtenant \
+  --output .env
+python3 scripts/validate_production_env.py --env-file .env
 ```
 
 Important variables:
@@ -120,10 +124,16 @@ npm install
 - API: `http://localhost:8000`
 - Dashboard: `http://localhost:3000`
 
+Production API process (without Docker):
+
+```bash
+source .env
+./scripts/run_production_api.sh
+```
+
 ## Dockerized SaaS deployment
 
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 

@@ -26,6 +26,26 @@ from app.security import Authenticator, RequestContext
 from app.tenant_runtime import TenantRuntime, TenantRuntimeRegistry
 
 
+def _validate_production_settings(settings: Settings) -> None:
+    """Fail fast on insecure production configuration combinations."""
+    if settings.environment != "production":
+        return
+
+    if any(origin.strip() == "*" for origin in settings.cors_origins):
+        raise ValueError("Production mode cannot use wildcard CORS origins.")
+
+    if settings.require_api_key and not settings.api_keys:
+        raise ValueError("Production mode with API key enforcement requires GRIDOS_API_KEYS.")
+
+    if settings.require_api_key:
+        min_key_length = 24
+        short_keys = [name for name, token in settings.api_keys.items() if len(token) < min_key_length]
+        if short_keys:
+            raise ValueError(
+                "Production API keys are too short for principals: " + ", ".join(short_keys)
+            )
+
+
 def _seed_segments() -> list[PowerLineSegment]:
     return [
         PowerLineSegment(
@@ -80,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     active_settings = settings or Settings.from_env()
     if active_settings.require_api_key and not active_settings.api_keys:
         raise ValueError("GRIDOS_REQUIRE_API_KEY=true requires GRIDOS_API_KEYS to be configured.")
+    _validate_production_settings(active_settings)
 
     logging.basicConfig(level=active_settings.log_level)
     logger = logging.getLogger("gridos-api")
@@ -291,6 +312,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "require_api_key": active_settings.require_api_key,
             "enforce_tenant_header": active_settings.enforce_tenant_header,
             "rate_limit_per_minute": active_settings.rate_limit_per_minute,
+            "api_workers": active_settings.api_workers,
+            "api_timeout_seconds": active_settings.api_timeout_seconds,
         }
 
     return app

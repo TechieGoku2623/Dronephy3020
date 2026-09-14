@@ -12,4 +12,4 @@ COPY app ./app
 
 EXPOSE 8000
 
-CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker --workers ${GRIDOS_API_WORKERS:-2} --bind 0.0.0.0:8000 --timeout ${GRIDOS_API_TIMEOUT_SECONDS:-60}"]

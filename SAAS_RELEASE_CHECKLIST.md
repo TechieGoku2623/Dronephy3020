@@ -5,6 +5,7 @@
 - [ ] Set strong tokens via `GRIDOS_API_KEYS`
 - [ ] Set `GRIDOS_ENFORCE_TENANT_HEADER=true`
 - [ ] Restrict `GRIDOS_CORS_ORIGINS` to production domain(s)
+- [ ] Run `python3 scripts/validate_production_env.py --env-file .env`
 
 ## Reliability
 - [ ] Configure `GRIDOS_RATE_LIMIT_PER_MINUTE` for expected load
@@ -12,7 +13,7 @@
 - [ ] Enable centralized log collection for request ID tracing
 
 ## Deployment
-- [ ] Copy `.env.example` to `.env` and fill secure values
+- [ ] Generate env file with `python3 scripts/generate_production_env.py --domain app.<your-domain> --output .env`
 - [ ] Run `docker compose up --build`
 - [ ] Confirm API on port `8000` and UI on port `3000`
 

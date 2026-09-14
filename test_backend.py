@@ -19,7 +19,7 @@ def build_settings(**overrides) -> Settings:
         app_name="GridOS Test",
         app_version="2.1.0-test",
         environment="test",
-        cors_origins=["*"],
+        cors_origins=["http://localhost:3000"],
         weather_api_base="",
         require_api_key=False,
         api_keys={},
@@ -27,6 +27,8 @@ def build_settings(**overrides) -> Settings:
         enforce_tenant_header=False,
         enable_rate_limit=False,
         rate_limit_per_minute=9999,
+        api_workers=1,
+        api_timeout_seconds=60,
         log_level="WARNING",
     )
     return Settings(**{**base.__dict__, **overrides})
@@ -187,3 +189,28 @@ def test_tenant_isolation_for_weather_override() -> None:
 
     assert a_response["safety_status"] == SafetyStatus.UNSAFE_WEATHER_LOCKOUT.value
     assert b_response["safety_status"] == SafetyStatus.SAFE.value
+
+
+def test_production_rejects_wildcard_cors() -> None:
+    """Production mode must reject wildcard CORS configuration."""
+    with pytest.raises(ValueError, match="wildcard CORS"):
+        create_app(
+            build_settings(
+                environment="production",
+                cors_origins=["*"],
+                require_api_key=True,
+                api_keys={"ops": "a" * 30},
+            )
+        )
+
+
+def test_production_rejects_short_api_keys() -> None:
+    """Production mode must reject weak API keys."""
+    with pytest.raises(ValueError, match="too short"):
+        create_app(
+            build_settings(
+                environment="production",
+                require_api_key=True,
+                api_keys={"ops": "short"},
+            )
+        )
