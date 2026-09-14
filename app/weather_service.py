@@ -26,9 +26,12 @@ class WeatherAssessment:
 class WeatherService:
     """Fetches weather context and applies operator "weather overwrite" controls."""
 
-    def __init__(self) -> None:
+    def __init__(self, api_base: str | None = None) -> None:
         self._overrides: dict[str, WeatherOverrideInput] = {}
-        self._api_base = os.getenv("WEATHER_API_BASE", "").strip()
+        if api_base is None:
+            self._api_base = os.getenv("WEATHER_API_BASE", "").strip()
+        else:
+            self._api_base = api_base.strip()
 
     @staticmethod
     def quadrant(latitude: float, longitude: float) -> str:

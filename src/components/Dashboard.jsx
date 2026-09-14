@@ -18,6 +18,8 @@ function toCanvasPoint(lat, lon) {
 }
 
 export default function Dashboard() {
+  const [tenantId, setTenantId] = useState(localStorage.getItem("gridos_tenant_id") || "public");
+  const [apiKey, setApiKey] = useState(localStorage.getItem("gridos_api_key") || "");
   const [segments, setSegments] = useState([]);
   const [telemetry, setTelemetry] = useState({
     drone_id: "DRONE-001",
@@ -40,6 +42,32 @@ export default function Dashboard() {
   });
   const [message, setMessage] = useState("");
 
+  function authHeaders() {
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Tenant-ID": tenantId,
+    };
+    if (apiKey.trim()) {
+      headers["X-API-Key"] = apiKey.trim();
+    }
+    return headers;
+  }
+
+  async function apiFetch(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        ...authHeaders(),
+        ...(options.headers || {}),
+      },
+    });
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.detail || `Request failed (${response.status})`);
+    }
+    return response.json();
+  }
+
   const metrics = useMemo(() => {
     const safe = segments.filter((segment) => segment.safety_status === "SAFE").length;
     const avgField =
@@ -50,68 +78,78 @@ export default function Dashboard() {
   }, [segments]);
 
   async function fetchSegments() {
-    const response = await fetch(`${API_BASE}/api/v1/grid/segments`);
-    const payload = await response.json();
+    const payload = await apiFetch("/api/v1/grid/segments", { method: "GET" });
     setSegments(payload.segments || []);
   }
 
   async function fetchRecommendation() {
-    const response = await fetch(`${API_BASE}/api/v1/routing/next-perch`, {
+    const payload = await apiFetch("/api/v1/routing/next-perch", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(telemetry),
     });
-    const payload = await response.json();
     setRecommendation(payload);
   }
 
   async function setWeatherOverride() {
-    await fetch(`${API_BASE}/api/v1/weather/override`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(weatherControl),
-    });
-    setMessage(`Weather override set for ${weatherControl.quadrant}`);
-    fetchSegments();
+    try {
+      await apiFetch("/api/v1/weather/override", {
+        method: "POST",
+        body: JSON.stringify(weatherControl),
+      });
+      setMessage(`Weather override set for ${weatherControl.quadrant}`);
+      fetchSegments();
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function setHumanOverride() {
-    await fetch(`${API_BASE}/api/v1/control/command`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...humanControl,
-        force_segment_id: humanControl.force_segment_id || null,
-      }),
-    });
-    setMessage("Human control command applied");
-    fetchRecommendation();
+    try {
+      await apiFetch("/api/v1/control/command", {
+        method: "POST",
+        body: JSON.stringify({
+          ...humanControl,
+          force_segment_id: humanControl.force_segment_id || null,
+        }),
+      });
+      setMessage("Human control command applied");
+      fetchRecommendation();
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function clearHumanOverride() {
-    await fetch(`${API_BASE}/api/v1/control/command`, { method: "DELETE" });
-    setMessage("Human control command cleared");
-    fetchRecommendation();
+    try {
+      await apiFetch("/api/v1/control/command", { method: "DELETE" });
+      setMessage("Human control command cleared");
+      fetchRecommendation();
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function sendFeedback(successfulPerch) {
     if (!recommendation || !recommendation.target_segment_id) return;
-    await fetch(`${API_BASE}/api/v1/memory/feedback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        drone_id: telemetry.drone_id,
-        segment_id: recommendation.target_segment_id,
-        successful_perch: successfulPerch,
-        observed_charge_rate_pct_per_hr: recommendation.estimated_charge_rate_pct_per_hr || 0,
-      }),
-    });
-    setMessage(successfulPerch ? "Success feedback recorded" : "Failure feedback recorded");
+    try {
+      await apiFetch("/api/v1/memory/feedback", {
+        method: "POST",
+        body: JSON.stringify({
+          drone_id: telemetry.drone_id,
+          segment_id: recommendation.target_segment_id,
+          successful_perch: successfulPerch,
+          observed_charge_rate_pct_per_hr: recommendation.estimated_charge_rate_pct_per_hr || 0,
+        }),
+      });
+      setMessage(successfulPerch ? "Success feedback recorded" : "Failure feedback recorded");
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   useEffect(() => {
-    fetchSegments();
-    fetchRecommendation();
+    fetchSegments().catch((error) => setMessage(error.message));
+    fetchRecommendation().catch((error) => setMessage(error.message));
     const telemetryTicker = setInterval(() => {
       setTelemetry((current) => ({
         ...current,
@@ -122,8 +160,8 @@ export default function Dashboard() {
     }, 3000);
 
     const stateTicker = setInterval(() => {
-      fetchSegments();
-      fetchRecommendation();
+      fetchSegments().catch((error) => setMessage(error.message));
+      fetchRecommendation().catch((error) => setMessage(error.message));
     }, 3500);
 
     return () => {
@@ -133,8 +171,15 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchRecommendation();
+    fetchRecommendation().catch((error) => setMessage(error.message));
   }, [telemetry.latitude, telemetry.longitude, telemetry.battery_percentage]);
+
+  useEffect(() => {
+    localStorage.setItem("gridos_tenant_id", tenantId);
+    localStorage.setItem("gridos_api_key", apiKey);
+    fetchSegments().catch((error) => setMessage(error.message));
+    fetchRecommendation().catch((error) => setMessage(error.message));
+  }, [tenantId, apiKey]);
 
   const dronePoint = toCanvasPoint(telemetry.latitude, telemetry.longitude);
 
@@ -157,6 +202,16 @@ export default function Dashboard() {
 
       <article className="viz-card">
         <h3>Vector Grid</h3>
+        <div className="inline-auth-panel">
+          <label>
+            Tenant ID
+            <input value={tenantId} onChange={(event) => setTenantId(event.target.value.toLowerCase())} />
+          </label>
+          <label>
+            API Key (optional in dev)
+            <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" />
+          </label>
+        </div>
         <svg viewBox="0 0 100 100" className="grid-canvas">
           {segments.map((entry) => {
             const start = toCanvasPoint(entry.segment.lat_start, entry.segment.lon_start);

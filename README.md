@@ -1,99 +1,152 @@
-# GridOS-Logic v2.0 (Dronephy3020)
+# GridOS-Logic v2.1 SaaS Release (Dronephy3020)
 
-Full-stack platform for autonomous power-line inspection drones that can perch and recharge from energized lines while staying under human command authority.
+GridOS-Logic is a full-stack command-and-routing platform for autonomous grid-living drones that perch on energized lines for recharge. This release upgrades the project to SaaS-ready architecture with tenant isolation, auth, rate limiting, deployment packaging, and CI.
 
-## What is implemented
+## Core platform capabilities
 
-### Backend (FastAPI)
-- Strict Pydantic v2 domain models (`app/models.py`)
-- Physics engine (`app/physics_engine.py`)
-  - IEEE 738-style thermal estimate for conductor heating
-  - Biot-Savart magnetic field estimate at 0.05m clamp distance
-  - Harmonic angle optimizer with corona-risk guardrail
-- Weather overwrite and async weather validator (`app/weather_service.py`)
-  - Automatic lockout if wind > 15 m/s or heavy precipitation
-- Geospatial routing core (`app/routing_engine.py`)
+### Autonomous routing and safety
+- Strict Pydantic v2 models (`app/models.py`)
+- Physics intelligence (`app/physics_engine.py`)
+  - IEEE 738-style thermal safety checks
+  - Biot-Savart magnetic induction estimation at `r=0.05m`
+  - THD-driven harmonic clamp-angle optimization
+  - Safety states:
+    - `SAFE`
+    - `UNSAFE_OVERHEATING`
+    - `UNSAFE_LOW_INDUCTION`
+    - `UNSAFE_CORONA_RISK`
+    - `UNSAFE_WEATHER_LOCKOUT`
+- Geospatial ranking (`app/routing_engine.py`)
   - Haversine distance
-  - Battery-constrained routing
-  - Safety-first filtering
-  - Multi-variable score:
-    - `score = (magnetic field / (distance + 0.1)) * memory_multiplier`
-- Human control authority (`app/human_control.py`)
+  - Battery-safe range filtering
+  - Score formula:
+    - `score = (magnetic_field / (distance + 0.1)) * memory_multiplier`
+
+### Operational intelligence
+- Asynchronous weather service (`app/weather_service.py`)
+  - External weather API support
+  - Manual weather overwrite lockouts
+- Human command authority (`app/human_control.py`)
   - Emergency grounding lockout
-  - Force-segment command with safety checks
+  - Force-segment routing override
 - Self-adapting memory (`app/memory_engine.py`)
-  - Drone-specific learning from success/failure outcomes
-  - Charge-rate EMA and bounded scoring influence
-- API routes (`app/main.py`)
-  - `POST /api/v1/routing/next-perch`
-  - `GET /api/v1/grid/segments`
-  - `POST /api/v1/weather/override`
-  - `POST /api/v1/control/command`
-  - `POST /api/v1/memory/feedback`
-  - `GET /api/v1/system/state`
+  - Per-drone/per-segment learning
+  - Success ratio + charge-rate EMA feedback loop
 
-### Frontend (React + Vite)
-- Dynamic dashboard (`src/App.js`, `src/components/Dashboard.jsx`)
-  - Real-time segment vector map with status colors
-  - Live telemetry marker
-  - Safety/induction metrics
-  - Interactive weather override controls
-  - Human command panel
-  - Memory feedback actions for online learning
+## SaaS release-level upgrades
 
-### Quality and orchestration
-- Test suite (`test_backend.py`) covering:
-  - Safety overrides
-  - Haversine metrics
-  - Harmonic edge cases
-  - Memory adaptation and human control
-- Runtime dependencies (`requirements.txt`)
-- One-command flow (`run.sh`) to:
-  1. Run tests
-  2. Start backend
-  3. Start frontend
+### 1) Multi-tenant runtime isolation
+- `app/tenant_runtime.py`
+- Each tenant gets isolated:
+  - weather overrides
+  - human control state
+  - adaptive memory profile
 
-## Why these advancements were added
+### 2) Security hardening
+- `app/security.py`
+- Header-based access controls:
+  - `X-Tenant-ID`
+  - `X-API-Key` (production-required when enabled)
+- Configurable strictness for tenant enforcement and API keys.
 
-You asked to add self-adapting memory, human control, and extra advancements informed by industry difficulties. This code includes:
+### 3) Environment-driven config
+- `app/config.py`
+- Environment variables control:
+  - CORS origins
+  - API key policies
+  - tenant defaults
+  - rate limits
+  - logging level
 
-1. **Self-adapting memory**
-   - Drones learn segment success history and observed charge quality.
-   - Improves repeat mission reliability over time.
+### 4) API protection and observability
+- `app/rate_limiter.py`
+- Fixed-window per-tenant/per-principal rate limiting
+- Request middleware adds:
+  - request ID (`X-Request-ID`)
+  - request timing logs
+  - rate-limit headers
 
-2. **Human command authority**
-   - Operators can immediately ground all drones (emergency lockout).
-   - Operators can force specific segments when required by operations.
+### 5) Ops and health endpoints
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /api/v1/system/release`
 
-3. **Weather API overwrite**
-   - Weather is treated as a first-class safety blocker, not an afterthought.
-   - Quadrant-level overrides let control rooms simulate and enforce micro-climate decisions.
+## API surface
 
-4. **Transparent rationale output**
-   - Recommendations include rationale strings for post-flight audit and regulator review.
+Core endpoints (tenant-aware):
+- `POST /api/v1/routing/next-perch`
+- `GET /api/v1/grid/segments`
+- `POST /api/v1/weather/override`
+- `DELETE /api/v1/weather/override/{quadrant}`
+- `POST /api/v1/control/command`
+- `DELETE /api/v1/control/command`
+- `POST /api/v1/memory/feedback`
+- `POST /api/v1/memory/reset/{drone_id}`
+- `GET /api/v1/system/state`
 
-## Industry challenges used in design decisions
+## Frontend (React + Vite)
 
-This architecture explicitly responds to common challenges seen across major drone operators:
+`src/components/Dashboard.jsx` provides:
+- live vector grid and telemetry rendering
+- real-time safety/induction metrics
+- weather simulation controls
+- human command controls
+- memory feedback controls
+- tenant + API key header controls for SaaS mode
 
-- **Weather volatility (seen broadly in delivery fleets such as Zipline-type operations):**
-  - Mitigation: async weather checks + hard lockout + operator weather overrides.
+## Production configuration
 
-- **Regulatory pressure for auditable safety and human oversight (common in Prime Air/BVLOS expansion discussions):**
-  - Mitigation: explicit human override layer and safety rationale in every recommendation.
-
-- **Battery/range bottlenecks and charging uncertainty (common in delivery and line-inspection fleets):**
-  - Mitigation: battery-safe range filtering + induction score + adaptive memory for better charging segment selection.
-
-- **Power-line landing/perching risk under harmonics and wind (observed in in-contact inspection research):**
-  - Mitigation: harmonic clamp-angle optimization + corona risk threshold + thermal and induction safety checks.
-
-## Quick start
+Copy and edit:
 
 ```bash
-python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+Important variables:
+- `GRIDOS_REQUIRE_API_KEY=true`
+- `GRIDOS_API_KEYS=ops:<token1>,monitor:<token2>`
+- `GRIDOS_ENFORCE_TENANT_HEADER=true`
+- `GRIDOS_CORS_ORIGINS=https://app.example.com`
+- `GRIDOS_RATE_LIMIT_PER_MINUTE=240`
+
+## Local run
+
+```bash
+python3 -m pip install -r requirements.txt
+npm install
 ./run.sh
 ```
 
-- Backend: `http://localhost:8000`
-- Frontend: `http://localhost:3000`
+- API: `http://localhost:8000`
+- Dashboard: `http://localhost:3000`
+
+## Dockerized SaaS deployment
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Containers:
+- `gridos-api` on port `8000`
+- `gridos-web` on port `3000`
+
+## CI
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
+1. Backend tests (`pytest`)
+2. Frontend production build (`vite build`)
+
+## Release checklist
+
+Use `SAAS_RELEASE_CHECKLIST.md` before shipping to production.
+
+## Test coverage focus
+
+`test_backend.py` validates:
+- geometric distance correctness
+- THD/harmonic safety edge cases
+- weather lockout behavior
+- human override routing
+- hardened API-key behavior
+- tenant isolation behavior

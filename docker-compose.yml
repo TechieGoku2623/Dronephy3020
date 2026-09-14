@@ -1,0 +1,28 @@
+services:
+  gridos-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: gridos-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  gridos-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE: http://localhost:8000
+    container_name: gridos-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      gridos-api:
+        condition: service_healthy

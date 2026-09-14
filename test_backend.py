@@ -5,20 +5,31 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, human_control, memory, weather_service
+from app.config import Settings
+from app.main import create_app
+from app.memory_engine import SelfAdaptingMemory
 from app.models import MissionFeedback, PowerLineSegment, SafetyStatus
 from app.physics_engine import evaluate_segment_physics
 from app.routing_engine import haversine_km
 
 
-@pytest.fixture(autouse=True)
-def reset_global_state() -> None:
-    """Reset mutable singleton state between tests."""
-    human_control.clear()
-    for quadrant in ("NW", "NE", "SW", "SE"):
-        weather_service.clear_override(quadrant)
-    memory.reset_drone("DRONE-TEST")
-    memory.reset_drone("DRONE-LOCKOUT")
+def build_settings(**overrides) -> Settings:
+    """Build deterministic app settings for tests."""
+    base = Settings(
+        app_name="GridOS Test",
+        app_version="2.1.0-test",
+        environment="test",
+        cors_origins=["*"],
+        weather_api_base="",
+        require_api_key=False,
+        api_keys={},
+        default_tenant_id="public",
+        enforce_tenant_header=False,
+        enable_rate_limit=False,
+        rate_limit_per_minute=9999,
+        log_level="WARNING",
+    )
+    return Settings(**{**base.__dict__, **overrides})
 
 
 def test_haversine_distance_basics() -> None:
@@ -48,6 +59,7 @@ def test_harmonic_edge_case_triggers_corona_status() -> None:
 
 def test_memory_multiplier_increases_after_success_feedback() -> None:
     """Self-adapting memory should reward consistent successful segments."""
+    memory = SelfAdaptingMemory()
     baseline = memory.score_multiplier("DRONE-TEST", "SEG-B3")
     for _ in range(4):
         memory.register_feedback(
@@ -64,6 +76,7 @@ def test_memory_multiplier_increases_after_success_feedback() -> None:
 
 def test_weather_override_forces_lockout() -> None:
     """A severe weather override should ground recommendations."""
+    app = create_app(build_settings())
     client = TestClient(app)
     client.post(
         "/api/v1/weather/override",
@@ -72,6 +85,7 @@ def test_weather_override_forces_lockout() -> None:
             "wind_speed_ms": 26.0,
             "heavy_precipitation": True,
         },
+        headers={"X-Tenant-ID": "acme"},
     )
     response = client.post(
         "/api/v1/routing/next-perch",
@@ -82,6 +96,7 @@ def test_weather_override_forces_lockout() -> None:
             "battery_percentage": 78.0,
             "consumption_rate_per_min": 1.2,
         },
+        headers={"X-Tenant-ID": "acme"},
     )
     payload = response.json()
     assert payload["safety_status"] == SafetyStatus.UNSAFE_WEATHER_LOCKOUT.value
@@ -90,6 +105,7 @@ def test_weather_override_forces_lockout() -> None:
 
 def test_human_force_segment_override() -> None:
     """Human control can force a specific safe segment."""
+    app = create_app(build_settings())
     client = TestClient(app)
     client.post(
         "/api/v1/control/command",
@@ -99,6 +115,7 @@ def test_human_force_segment_override() -> None:
             "emergency_lockout": False,
             "reason": "Prefer low-risk maintenance corridor",
         },
+        headers={"X-Tenant-ID": "acme"},
     )
     response = client.post(
         "/api/v1/routing/next-perch",
@@ -109,7 +126,64 @@ def test_human_force_segment_override() -> None:
             "battery_percentage": 70.0,
             "consumption_rate_per_min": 1.0,
         },
+        headers={"X-Tenant-ID": "acme"},
     )
     payload = response.json()
     assert payload["target_segment_id"] == "SEG-B3"
     assert payload["safety_status"] == SafetyStatus.SAFE.value
+
+
+def test_api_key_required_in_hardened_mode() -> None:
+    """Production-style mode should reject unauthenticated access."""
+    app = create_app(
+        build_settings(
+            require_api_key=True,
+            api_keys={"ops": "super-secret-token"},
+        )
+    )
+    client = TestClient(app)
+    unauthorized = client.get("/api/v1/grid/segments", headers={"X-Tenant-ID": "acme"})
+    assert unauthorized.status_code == 401
+
+    authorized = client.get(
+        "/api/v1/grid/segments",
+        headers={"X-Tenant-ID": "acme", "X-API-Key": "super-secret-token"},
+    )
+    assert authorized.status_code == 200
+
+
+def test_tenant_isolation_for_weather_override() -> None:
+    """Overrides in one tenant should not leak into another tenant."""
+    app = create_app(build_settings())
+    client = TestClient(app)
+    client.post(
+        "/api/v1/weather/override",
+        json={"quadrant": "NW", "wind_speed_ms": 40.0, "heavy_precipitation": True},
+        headers={"X-Tenant-ID": "tenant-a"},
+    )
+
+    a_response = client.post(
+        "/api/v1/routing/next-perch",
+        json={
+            "drone_id": "DRONE-A",
+            "latitude": 37.7720,
+            "longitude": -122.4410,
+            "battery_percentage": 80.0,
+            "consumption_rate_per_min": 1.0,
+        },
+        headers={"X-Tenant-ID": "tenant-a"},
+    ).json()
+    b_response = client.post(
+        "/api/v1/routing/next-perch",
+        json={
+            "drone_id": "DRONE-B",
+            "latitude": 37.7720,
+            "longitude": -122.4410,
+            "battery_percentage": 80.0,
+            "consumption_rate_per_min": 1.0,
+        },
+        headers={"X-Tenant-ID": "tenant-b"},
+    ).json()
+
+    assert a_response["safety_status"] == SafetyStatus.UNSAFE_WEATHER_LOCKOUT.value
+    assert b_response["safety_status"] == SafetyStatus.SAFE.value
