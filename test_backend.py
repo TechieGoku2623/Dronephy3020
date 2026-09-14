@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, human_control, memory, weather_service
-from app.models import MissionFeedback, PowerLineSegment, SafetyStatus
+from app.main import app, human_control, maintenance, memory, weather_service
+from app.models import AnomalySeverity, DroneTelemetry, MissionFeedback, PowerLineSegment, SafetyStatus
 from app.physics_engine import evaluate_segment_physics
 from app.routing_engine import haversine_km
 
@@ -19,6 +19,8 @@ def reset_global_state() -> None:
         weather_service.clear_override(quadrant)
     memory.reset_drone("DRONE-TEST")
     memory.reset_drone("DRONE-LOCKOUT")
+    memory.reset_drone("DRONE-MAINT")
+    maintenance.reset()
 
 
 def test_haversine_distance_basics() -> None:
@@ -113,3 +115,63 @@ def test_human_force_segment_override() -> None:
     payload = response.json()
     assert payload["target_segment_id"] == "SEG-B3"
     assert payload["safety_status"] == SafetyStatus.SAFE.value
+
+
+def test_predictive_maintenance_flags_repeated_perch_failures() -> None:
+    """Repeated failed perches should raise a critical segment alert."""
+    for _ in range(3):
+        maintenance.register_feedback(
+            MissionFeedback(
+                drone_id="DRONE-MAINT",
+                segment_id="SEG-C5",
+                successful_perch=False,
+                observed_charge_rate_pct_per_hr=2.0,
+            )
+        )
+    alert = maintenance.segment_alert("SEG-C5")
+    assert alert.severity == AnomalySeverity.CRITICAL
+    assert alert.anomaly_score > 40.0
+    assert maintenance.should_skip_autonomous("SEG-C5") is True
+    assert maintenance.routing_multiplier("SEG-C5") < 0.6
+
+
+def test_high_consumption_drone_is_watch_or_critical() -> None:
+    """Elevated declared drain should surface a drone-level maintenance alert."""
+    maintenance.ingest_telemetry(
+        DroneTelemetry(
+            drone_id="DRONE-MAINT",
+            latitude=37.7712,
+            longitude=-122.4444,
+            battery_percentage=62.0,
+            consumption_rate_per_min=4.2,
+        )
+    )
+    alert = maintenance.drone_alert("DRONE-MAINT")
+    assert alert.severity in {AnomalySeverity.WATCH, AnomalySeverity.CRITICAL}
+    report = TestClient(app).get("/api/v1/maintenance/report").json()
+    assert report["highest_severity"] in {
+        AnomalySeverity.WATCH.value,
+        AnomalySeverity.CRITICAL.value,
+    }
+    assert any(item["entity_id"] == "DRONE-MAINT" for item in report["alerts"])
+
+
+def test_next_perch_returns_a_live_safe_recommendation() -> None:
+    """Sample routing call should produce a usable perch recommendation."""
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/routing/next-perch",
+        json={
+            "drone_id": "DRONE-TEST",
+            "latitude": 37.7712,
+            "longitude": -122.4444,
+            "battery_percentage": 76.0,
+            "consumption_rate_per_min": 1.1,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["target_segment_id"] not in {"NO_SAFE_SEGMENT", "OPERATOR_LOCKOUT"}
+    assert payload["safety_status"] == SafetyStatus.SAFE.value
+    assert payload["estimated_charge_rate_pct_per_hr"] >= 0.0
+    assert "score=" in payload["rationale"]

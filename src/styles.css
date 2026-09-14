@@ -54,7 +54,7 @@ body {
 }
 
 .metric-card {
-  grid-column: span 4;
+  grid-column: span 3;
 }
 
 .metric-card strong {
@@ -138,10 +138,33 @@ button.ghost {
   gap: 0.6rem;
 }
 
+.maintenance-card {
+  grid-column: span 7;
+}
+
+.alert-list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  color: #d7e6ff;
+}
+
+.severity-normal {
+  color: #2ecc71;
+}
+
+.severity-watch {
+  color: #f1c40f;
+}
+
+.severity-critical {
+  color: #e74c3c;
+}
+
 @media (max-width: 1000px) {
   .metric-card,
   .control-card,
-  .viz-card {
+  .viz-card,
+  .maintenance-card {
     grid-column: span 12;
   }
 }

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.human_control import HumanControlLayer
+from app.maintenance_engine import PredictiveMaintenanceEngine
 from app.memory_engine import SelfAdaptingMemory
 from app.models import (
     DroneTelemetry,
@@ -82,12 +83,20 @@ def _seed_segments() -> list[PowerLineSegment]:
 weather_service = WeatherService()
 human_control = HumanControlLayer()
 memory = SelfAdaptingMemory()
-routing_engine = RoutingEngine(_seed_segments(), weather_service, memory, human_control)
+maintenance = PredictiveMaintenanceEngine()
+routing_engine = RoutingEngine(
+    _seed_segments(),
+    weather_service,
+    memory,
+    human_control,
+    maintenance,
+)
 
 
 @app.post("/api/v1/routing/next-perch")
 async def next_perch(telemetry: DroneTelemetry):
     """Compute the safest and highest-yield next perch recommendation."""
+    maintenance.ingest_telemetry(telemetry)
     return await routing_engine.recommend_next_perch(telemetry)
 
 
@@ -129,6 +138,7 @@ async def clear_control_command():
 async def post_mission_feedback(feedback: MissionFeedback):
     """Ingest mission outcome for self-adapting memory updates."""
     memory.register_feedback(feedback)
+    maintenance.register_feedback(feedback)
     return {"ok": True}
 
 
@@ -139,11 +149,19 @@ async def reset_memory(drone_id: str):
     return {"ok": True, "drone_id": drone_id}
 
 
+@app.get("/api/v1/maintenance/report")
+async def maintenance_report():
+    """Return predictive-maintenance alerts for drones and line segments."""
+    return maintenance.report()
+
+
 @app.get("/api/v1/system/state")
 async def system_state():
-    """Return current control and memory state for audit visibility."""
+    """Return current control, memory, and maintenance state for audit visibility."""
     state = human_control.active_state()
+    report = maintenance.report()
     return {
         "human_control": asdict(state) if state else None,
         "memory_snapshot": memory.snapshot(),
+        "maintenance": report.model_dump(),
     }

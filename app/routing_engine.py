@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import asin, cos, radians, sin, sqrt
 
 from app.human_control import HumanControlLayer
+from app.maintenance_engine import PredictiveMaintenanceEngine
 from app.memory_engine import SelfAdaptingMemory
 from app.models import (
     DroneTelemetry,
@@ -57,11 +58,13 @@ class RoutingEngine:
         weather_service: WeatherService,
         memory: SelfAdaptingMemory,
         human_control: HumanControlLayer,
+        maintenance: PredictiveMaintenanceEngine,
     ) -> None:
         self._segments = segments
         self._weather = weather_service
         self._memory = memory
         self._human_control = human_control
+        self._maintenance = maintenance
 
     def max_safe_range_km(self, telemetry: DroneTelemetry) -> float:
         """Estimate safe travel range from battery and consumption rates."""
@@ -76,13 +79,21 @@ class RoutingEngine:
             center_lat, center_lon = segment_center(segment)
             weather = await self._weather.assess(center_lat, center_lon, segment.wind_speed_ms)
             physics = evaluate_segment_physics(segment)
+            self._maintenance.observe_segment(
+                segment,
+                physics.conductor_temp_c,
+                physics.magnetic_field_microtesla,
+            )
             safety = weather.safety_status if weather.safety_status != SafetyStatus.SAFE else physics.safety_status
+            alert = self._maintenance.segment_alert(segment.segment_id)
             states.append(
                 SegmentState(
                     segment=segment,
                     safety_status=safety,
                     magnetic_field_microtesla=physics.magnetic_field_microtesla,
                     conductor_temp_c=physics.conductor_temp_c,
+                    anomaly_score=alert.anomaly_score,
+                    anomaly_severity=alert.severity,
                 )
             )
         return states
@@ -106,12 +117,22 @@ class RoutingEngine:
                 continue
 
             physics = evaluate_segment_physics(segment)
+            self._maintenance.observe_segment(
+                segment,
+                physics.conductor_temp_c,
+                physics.magnetic_field_microtesla,
+            )
             if physics.safety_status != SafetyStatus.SAFE:
                 skip_reasons.append(f"{segment.segment_id}: {physics.safety_status.value}")
                 continue
 
             memory_multiplier = self._memory.score_multiplier(telemetry.drone_id, segment.segment_id)
-            score = (physics.magnetic_field_microtesla / (distance + 0.1)) * memory_multiplier
+            maintenance_multiplier = self._maintenance.routing_multiplier(segment.segment_id)
+            score = (
+                (physics.magnetic_field_microtesla / (distance + 0.1))
+                * memory_multiplier
+                * maintenance_multiplier
+            )
             angle_penalty = 1.0 - abs(physics.optimal_clamp_angle_degrees - 90.0) / 100.0
             estimated_charge_rate = max(0.0, physics.magnetic_field_microtesla * 0.16 * angle_penalty)
 
@@ -125,10 +146,22 @@ class RoutingEngine:
                     estimated_charge_rate=min(estimated_charge_rate, 55.0),
                     rationale=(
                         f"score={score:.2f}, distance={distance:.2f}km, "
-                        f"field={physics.magnetic_field_microtesla:.2f}uT, memory={memory_multiplier:.2f}"
+                        f"field={physics.magnetic_field_microtesla:.2f}uT, "
+                        f"memory={memory_multiplier:.2f}, maintenance={maintenance_multiplier:.2f}"
                     ),
                 )
             )
+
+        healthy_candidates = [
+            candidate
+            for candidate in candidates
+            if not self._maintenance.should_skip_autonomous(candidate.segment.segment_id)
+        ]
+        if healthy_candidates:
+            skipped_critical = len(candidates) - len(healthy_candidates)
+            candidates = healthy_candidates
+            if skipped_critical:
+                skip_reasons.append(f"{skipped_critical} segment(s) deferred for predictive maintenance")
 
         if not candidates:
             return RouteRecommendation(

@@ -7,7 +7,7 @@ export default function AppView() {
         <h1>GridOS-Logic v2.0</h1>
         <p>
           Autonomous perch routing with dynamic harmonics, self-adapting memory,
-          and mandatory human-command authority.
+          predictive maintenance, and mandatory human-command authority.
         </p>
       </header>
       <Dashboard />

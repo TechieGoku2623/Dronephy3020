@@ -98,6 +98,38 @@ class MissionFeedback(BaseModel):
     observed_charge_rate_pct_per_hr: float = Field(ge=0.0, le=100.0)
 
 
+class AnomalySeverity(str, Enum):
+    """Predictive-maintenance severity used for fleet and line health."""
+
+    NORMAL = "NORMAL"
+    WATCH = "WATCH"
+    CRITICAL = "CRITICAL"
+
+
+class MaintenanceAlert(BaseModel):
+    """Single predictive-maintenance finding for a drone or line segment."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    entity_type: str = Field(pattern="^(drone|segment)$")
+    entity_id: str = Field(min_length=2, max_length=64)
+    severity: AnomalySeverity
+    anomaly_score: float = Field(ge=0.0, le=100.0)
+    predicted_issue: str = Field(min_length=8, max_length=256)
+    recommended_action: str = Field(min_length=8, max_length=256)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class MaintenanceReport(BaseModel):
+    """Fleet-wide predictive maintenance snapshot."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    alerts: list[MaintenanceAlert]
+    highest_severity: AnomalySeverity
+    summary: str = Field(min_length=8, max_length=512)
+
+
 class SegmentState(BaseModel):
     """Public segment state used by the frontend dashboard."""
 
@@ -107,3 +139,5 @@ class SegmentState(BaseModel):
     safety_status: SafetyStatus
     magnetic_field_microtesla: float
     conductor_temp_c: float
+    anomaly_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    anomaly_severity: AnomalySeverity = AnomalySeverity.NORMAL
