@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from fastapi.testclient import TestClient
 
 from app.main import app, human_control, memory, weather_service
 from app.models import MissionFeedback, PowerLineSegment, SafetyStatus
@@ -62,56 +62,54 @@ def test_memory_multiplier_increases_after_success_feedback() -> None:
     assert improved > baseline
 
 
-@pytest.mark.asyncio
-async def test_weather_override_forces_lockout() -> None:
+def test_weather_override_forces_lockout() -> None:
     """A severe weather override should ground recommendations."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post(
-            "/api/v1/weather/override",
-            json={
-                "quadrant": "NW",
-                "wind_speed_ms": 26.0,
-                "heavy_precipitation": True,
-            },
-        )
-        response = await client.post(
-            "/api/v1/routing/next-perch",
-            json={
-                "drone_id": "DRONE-LOCKOUT",
-                "latitude": 37.7722,
-                "longitude": -122.4411,
-                "battery_percentage": 78.0,
-                "consumption_rate_per_min": 1.2,
-            },
-        )
+    client = TestClient(app)
+    client.post(
+        "/api/v1/weather/override",
+        json={
+            "quadrant": "NW",
+            "wind_speed_ms": 26.0,
+            "heavy_precipitation": True,
+        },
+    )
+    response = client.post(
+        "/api/v1/routing/next-perch",
+        json={
+            "drone_id": "DRONE-LOCKOUT",
+            "latitude": 37.7722,
+            "longitude": -122.4411,
+            "battery_percentage": 78.0,
+            "consumption_rate_per_min": 1.2,
+        },
+    )
     payload = response.json()
     assert payload["safety_status"] == SafetyStatus.UNSAFE_WEATHER_LOCKOUT.value
     assert payload["target_segment_id"] in {"NO_SAFE_SEGMENT", "OPERATOR_LOCKOUT"}
 
 
-@pytest.mark.asyncio
-async def test_human_force_segment_override() -> None:
+def test_human_force_segment_override() -> None:
     """Human control can force a specific safe segment."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post(
-            "/api/v1/control/command",
-            json={
-                "operator_id": "ops-chief",
-                "force_segment_id": "SEG-B3",
-                "emergency_lockout": False,
-                "reason": "Prefer low-risk maintenance corridor",
-            },
-        )
-        response = await client.post(
-            "/api/v1/routing/next-perch",
-            json={
-                "drone_id": "DRONE-TEST",
-                "latitude": 37.7712,
-                "longitude": -122.4444,
-                "battery_percentage": 70.0,
-                "consumption_rate_per_min": 1.0,
-            },
-        )
+    client = TestClient(app)
+    client.post(
+        "/api/v1/control/command",
+        json={
+            "operator_id": "ops-chief",
+            "force_segment_id": "SEG-B3",
+            "emergency_lockout": False,
+            "reason": "Prefer low-risk maintenance corridor",
+        },
+    )
+    response = client.post(
+        "/api/v1/routing/next-perch",
+        json={
+            "drone_id": "DRONE-TEST",
+            "latitude": 37.7712,
+            "longitude": -122.4444,
+            "battery_percentage": 70.0,
+            "consumption_rate_per_min": 1.0,
+        },
+    )
     payload = response.json()
     assert payload["target_segment_id"] == "SEG-B3"
     assert payload["safety_status"] == SafetyStatus.SAFE.value
