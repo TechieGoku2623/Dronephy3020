@@ -2,6 +2,39 @@
 
 Full-stack platform for autonomous power-line inspection drones that can perch and recharge from energized lines while staying under human command authority.
 
+## Demo
+
+<video src="docs/demo.mp4" controls width="100%"></video>
+
+If the player does not render on GitHub, download **[docs/demo.mp4](docs/demo.mp4)**.
+
+The recording walks the React command dashboard: live vector grid, safety metrics, weather lockout, human override, and predictive-maintenance alerts.
+
+## Repository structure
+
+```text
+dronephy3020/
+├── app/                      # FastAPI backend
+│   ├── main.py               # Routes: routing, grid, weather, control, memory, maintenance
+│   ├── physics_engine.py     # IEEE 738 thermal + Biot-Savart induction
+│   ├── routing_engine.py     # Haversine + battery-safe perch scoring
+│   ├── weather_service.py
+│   ├── human_control.py
+│   ├── memory_engine.py
+│   └── maintenance_engine.py
+├── src/
+│   ├── main.jsx
+│   ├── AppView.jsx
+│   ├── components/Dashboard.jsx
+│   └── styles.css
+├── docs/demo.mp4             # Product walkthrough
+├── test_backend.py
+├── requirements.txt
+├── package.json
+├── vite.config.js
+└── run.sh
+```
+
 ## What is implemented
 
 ### Backend (FastAPI)
