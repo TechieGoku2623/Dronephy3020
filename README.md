@@ -11,7 +11,7 @@ Drones that land on live conductors to recharge — with physics safety, weather
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)](#quick-start)
 [![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=black)](#quick-start)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](#quick-start)
-[![Demo](https://img.shields.io/badge/Demo-docs%2Fdemo.mp4-00D1FF)](docs/demo.mp4)
+[![Demo](https://img.shields.io/badge/Demo-plays%20on%20this%20page-00D1FF)](#watch-the-demo)
 
 </div>
 
@@ -19,18 +19,16 @@ Drones that land on live conductors to recharge — with physics safety, weather
 
 ## Watch the demo
 
-The GIF **plays on this page**. Cursor’s recorder logo and end-of-video cube bumper have been removed.
+The preview **plays on this page**. The Cursor cube end-card is not in the file.
 
 <p align="center">
   <img src="docs/demo.gif" alt="GridOS dashboard walkthrough — plays inline" width="920"/>
 </p>
 
 <p align="center">
-  <a href="https://github.com/TechieGoku2623/Dronephy3020/blob/main/docs/demo.mp4"><strong>▶ Open HD player on GitHub</strong></a>
+  <a href="https://github.com/TechieGoku2623/Dronephy3020/blob/main/docs/demo.mp4"><strong>HD in-browser player</strong></a>
   ·
-  <a href="docs/watch.html">local HTML player</a>
-  ·
-  <a href="docs/demo.webp">WebP</a>
+  <a href="docs/watch.html">HTML player</a>
 </p>
 
 The clip is the live React dashboard talking to the FastAPI physics stack — not a mockup.
