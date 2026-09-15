@@ -151,6 +151,21 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
 
 Use `SAAS_RELEASE_CHECKLIST.md` before shipping to production.
 
+## Simulation walkthrough video
+
+The following simulation demonstrates an end-to-end operator workflow:
+
+1. Open dashboard and set tenant context
+2. Apply severe weather override (wind + precipitation)
+3. Observe automatic weather lockout (`UNSAFE_WEATHER_LOCKOUT`)
+4. Apply human command-layer override inputs
+5. Submit self-adapting memory feedback events
+
+<video src="docs/videos/gridos_saas_simulation_walkthrough_complete.mp4" controls width="960"></video>
+
+Direct file link (if your markdown renderer does not autoplay embedded video):
+- [GridOS SaaS simulation walkthrough](docs/videos/gridos_saas_simulation_walkthrough_complete.mp4)
+
 ## Test coverage focus
 
 `test_backend.py` validates:
