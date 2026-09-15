@@ -4,6 +4,8 @@ Full-stack platform for autonomous power-line inspection drones that can perch a
 
 ## Demo
 
+[![GridOS dashboard demo](docs/demo-poster.jpg)](docs/demo.mp4)
+
 <video src="docs/demo.mp4" controls width="100%"></video>
 
 If the player does not render on GitHub, download **[docs/demo.mp4](docs/demo.mp4)**.
