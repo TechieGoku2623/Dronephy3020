@@ -19,17 +19,19 @@ Drones that land on live conductors to recharge — with physics safety, weather
 
 ## Watch the demo
 
+The GIF **plays on this page**. Cursor’s recorder logo and end-of-video cube bumper have been removed.
+
 <p align="center">
-  <a href="docs/demo.mp4">
-    <img src="docs/demo-poster.jpg" alt="GridOS dashboard walkthrough" width="920"/>
-  </a>
+  <img src="docs/demo.gif" alt="GridOS dashboard walkthrough — plays inline" width="920"/>
 </p>
 
 <p align="center">
-  <a href="docs/demo.mp4"><strong>▶ Play walkthrough (docs/demo.mp4)</strong></a>
+  <a href="https://github.com/TechieGoku2623/Dronephy3020/blob/main/docs/demo.mp4"><strong>▶ Open HD player on GitHub</strong></a>
+  ·
+  <a href="docs/watch.html">local HTML player</a>
+  ·
+  <a href="docs/demo.webp">WebP</a>
 </p>
-
-<video src="docs/demo.mp4" controls width="100%" poster="docs/demo-poster.jpg"></video>
 
 The clip is the live React dashboard talking to the FastAPI physics stack — not a mockup.
 
