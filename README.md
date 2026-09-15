@@ -4,9 +4,9 @@
 
 ### Dronephy3020
 
-**Autonomous perch routing for power-line inspection drones**
+**Safe next-perch decisions for power-line inspection drones**
 
-Drones that land on live conductors to recharge — with physics safety, weather lockout, human override, memory, and predictive maintenance in one command dashboard.
+Inspection drones that land on live conductors to recharge cannot pick the closest span. They need a defendable next perch — physics, weather, battery, memory, maintenance, and a human who can always override.
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)](#quick-start)
 [![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=black)](#quick-start)
@@ -17,84 +17,86 @@ Drones that land on live conductors to recharge — with physics safety, weather
 
 ---
 
-## Watch the demo
+## The problem
 
-This walkthrough **plays on this page** — it does not download a file.
+A perch that looks convenient can still be the wrong landing.
 
-<p align="center">
-  <img src="docs/demo.gif" alt="GridOS dashboard walkthrough — plays inline" width="920"/>
-</p>
+| What goes wrong in the field | Why “closest span” fails |
+| --- | --- |
+| Hot or overloaded conductor | Thermal limit exceeded |
+| Weak magnetic coupling | Induction too low to charge |
+| Wind, rain, or icing | Autonomy should stop, not improvise |
+| Harmonic / worn clamp sites | Silent asset wear |
+| Battery fade | Range that used to be safe is not |
 
-The clip is the live React dashboard talking to the FastAPI physics stack — not a mockup.
+Without a written rationale, operators cannot audit why the aircraft landed where it did — and they cannot force a corridor or ground the fleet when conditions change.
 
-| Time in clip | What you are seeing | Why it matters |
-| --- | --- | --- |
-| Header metrics | Drones, thermal safety, induction µT, maintenance watch | The fleet state is one glance, not a log dump |
-| Vector grid | Colored spans (SEG-A1, B3, C5, D9) + drone marker | Green = safe to perch; color is a safety state, not decoration |
-| Weather override | Heavy precip + Apply | Grid goes **red**, next perch becomes `NO_SAFE_SEGMENT` |
-| Human command | Operator authority panel | A person can ground the fleet or force a span |
-| Successful perch | Memory feedback button | The drone learns which spans actually charged well |
-| Anomaly forecast | WATCH on SEG-C5 harmonics | Routing will avoid degrading assets unless a human forces them |
-
----
-
-## In plain English
-
-Inspection drones that *perch on energized lines* have a brutal constraint: the span that looks closest might be thermally unsafe, magnetically weak, or about to fail from harmonics.
+## What this software does
 
 GridOS answers one operational question:
 
 > Given this drone’s battery, this weather, and this grid, **which span is safe to land on next — and why?**
 
-The answer is not a single score. It is a pipeline:
+The dashboard is a live React client on a FastAPI physics stack. Segment color is a **safety state**, not decoration. Apply heavy precipitation and the grid goes red: next perch becomes `NO_SAFE_SEGMENT`. A human can still force a span or declare an emergency lockout.
+
+---
+
+## Watch the demo
+
+The walkthrough **plays on this page**. It is the real dashboard talking to the API — not a mockup.
+
+<p align="center">
+  <img src="docs/demo.gif" alt="GridOS dashboard walkthrough — plays inline" width="920"/>
+</p>
+
+| In the clip | Why it matters |
+| --- | --- |
+| Header metrics | Fleet, thermal safety, induction, maintenance watch |
+| Vector grid | Green = safe to perch |
+| Weather override | Autonomy stops when weather lockout fires |
+| Human command | Operator authority always wins |
+| Successful perch | Memory of which spans actually charged |
+| Anomaly forecast | Routing avoids degrading assets unless forced |
+
+---
+
+## How it solves the problem
 
 ```text
-Telemetry  →  Physics (heat, induction, corona)
-           →  Weather lockout
-           →  Battery-safe range
-           →  Memory of past perches
-           →  Predictive maintenance penalty
-           →  Human override (always wins)
-           →  Next perch + written rationale
+Grid telemetry
+    → physics (heat, induction, corona, clamp angle)
+    → weather lockout
+    → battery-safe range
+    → memory of past perches
+    → predictive maintenance penalty
+    → human override (always wins)
+    → next perch + written rationale
 ```
 
-If wind or rain is over the limit, **autonomy stops**. That is visible in the demo: four green spans become four red spans in one click.
-
----
-
-## What the stack implements
-
-| Layer | Where | What it does |
+| Layer | Code | Role |
 | --- | --- | --- |
-| Physics | `app/physics_engine.py` | IEEE 738-style heating, Biot-Savart induction at 0.05 m, harmonic clamp angle, corona guardrail |
-| Weather | `app/weather_service.py` | Lockout if wind > 15 m/s or heavy precipitation; quadrant overrides |
-| Routing | `app/routing_engine.py` | Haversine + battery filter. `score = (B / (distance + 0.1)) × memory` |
+| Physics | `app/physics_engine.py` | IEEE 738-style heating, Biot–Savart induction at 0.05 m, harmonic clamp angle, corona guardrail |
+| Weather | `app/weather_service.py` | Lockout if wind > 15 m/s or heavy precipitation |
+| Routing | `app/routing_engine.py` | Haversine + battery filter; score ≈ `(B / (distance + 0.1)) × memory × maintenance` |
 | Human | `app/human_control.py` | Emergency grounding; force-segment with safety checks |
-| Memory | `app/memory_engine.py` | Per-drone success ratio + charge-rate EMA |
-| Maintenance | `app/maintenance_engine.py` | Battery-drain and span-wear scoring; CRITICAL spans skipped unless forced |
-| Dashboard | `src/components/Dashboard.jsx` | Live vector map, controls, anomaly list |
+| Memory | `app/memory_engine.py` | Per-drone success ratio and charge-rate EMA |
+| Maintenance | `app/maintenance_engine.py` | Battery-drain and span-wear; CRITICAL spans skipped unless forced |
+| Dashboard | `src/components/Dashboard.jsx` | Live map, controls, anomaly list |
 
----
-
-## Repository map
+The grid in this repo is a **seeded in-memory model** (SF Bay–style spans), not a live utility SCADA feed. Physics modules are compact engineering approximations, not full FEM.
 
 ```text
 dronephy3020/
-├── app/                         FastAPI backend
-│   ├── main.py                  routing, grid, weather, control, memory, maintenance
+├── app/                         FastAPI
+│   ├── main.py
 │   ├── physics_engine.py
 │   ├── routing_engine.py
 │   ├── weather_service.py
 │   ├── human_control.py
 │   ├── memory_engine.py
 │   └── maintenance_engine.py
-├── src/
-│   ├── components/Dashboard.jsx Command UI in the video
-│   ├── AppView.jsx
-│   └── styles.css
-├── docs/
-│   ├── demo.mp4
-│   └── demo-poster.jpg
+├── src/                         React + Vite dashboard
+├── docs/demo.gif
 ├── test_backend.py
 ├── requirements.txt
 ├── package.json
@@ -113,29 +115,13 @@ npm install
 
 | Surface | URL |
 | --- | --- |
-| Dashboard (the demo) | http://localhost:3000 |
+| Dashboard | http://localhost:3000 |
 | API | http://localhost:8000 |
 | OpenAPI | http://localhost:8000/docs |
 
----
+Optional: `WEATHER_API_BASE` for live weather; otherwise segment wind and operator override apply. The UI uses `VITE_API_BASE` (default `http://localhost:8000`).
 
-## Why these controls exist
-
-Industry fleets keep losing aircraft to the same five failure modes. GridOS maps each one to a concrete layer:
-
-| Industry pain | What this repo does |
-| --- | --- |
-| Weather volatility (delivery / inspection) | Async weather + hard lockout + operator overwrite |
-| BVLOS / audit pressure | Human command layer + rationale string on every perch |
-| Battery and charging uncertainty | Range filter + induction score + memory of real charge rates |
-| Landing on harmonic / hot conductors | Thermal, corona, and clamp-angle checks |
-| Silent wear (battery fade, clamp life) | Predictive scores that pull CRITICAL assets out of autonomy |
-
----
-
-## API usage
-
-Next perch:
+### Example: next perch
 
 ```bash
 curl -s http://localhost:8000/api/v1/routing/next-perch \
@@ -149,36 +135,8 @@ curl -s http://localhost:8000/api/v1/routing/next-perch \
   }'
 ```
 
-Teach memory + maintenance from a real landing:
-
-```bash
-curl -s http://localhost:8000/api/v1/memory/feedback \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "drone_id": "DRONE-001",
-    "segment_id": "SEG-B3",
-    "successful_perch": true,
-    "observed_charge_rate_pct_per_hr": 28.5
-  }'
-```
-
-```bash
-curl -s http://localhost:8000/api/v1/maintenance/report
-```
-
-Human override:
-
-```bash
-curl -s http://localhost:8000/api/v1/control/command \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "operator_id": "ops-01",
-    "force_segment_id": "SEG-B3",
-    "emergency_lockout": false,
-    "reason": "Prefer low-risk maintenance corridor"
-  }'
-```
+Teach memory from a real landing with `POST /api/v1/memory/feedback`. Force a span or ground the fleet with `POST /api/v1/control/command`.
 
 ---
 
-<p align="center"><sub>GridOS-Logic · perch only when physics, weather, memory, and a human all allow it</sub></p>
+<p align="center"><sub>GridOS · perch only when physics, weather, memory, and a human all allow it</sub></p>
