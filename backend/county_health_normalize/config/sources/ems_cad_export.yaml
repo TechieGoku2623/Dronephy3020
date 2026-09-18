@@ -1,0 +1,49 @@
+# EMS / ambulance CAD export — short cryptic headers and European-style dates.
+source_system: ems_cad_export
+description: >
+  Emergency Medical Services computer-aided dispatch export. Uses short
+  cryptic headers, a legacy DOB column for the incident/report date
+  (DD/MM/YYYY), and coded category values (R/G/V/P/O) expanded via value_map.
+
+columns:
+  case_id:
+    source: "INC_ID"
+  report_date:
+    # Legacy CAD label — this is the incident/report date, not a birth date.
+    # Demonstrates config-driven handling of DOB / date_of_birth style names.
+    source: "DOB"
+    date_formats:
+      - "%d/%m/%Y"
+      - "%d-%m-%Y"
+  zip_code:
+    source: "ZIP5"
+  condition_category:
+    source: "CAT"
+    value_map:
+      "R": "respiratory"
+      "G": "gastrointestinal"
+      "V": "vector_borne"
+      "P": "vaccine_preventable"
+      "O": "other"
+  age_bracket:
+    source: "AGE_GRP"
+    value_map:
+      "A": "0-4"
+      "B": "5-17"
+      "C": "18-49"
+      "D": "50-64"
+      "E": "65+"
+  severity:
+    source: "SEV"
+    value_map:
+      "1": "mild"
+      "2": "moderate"
+      "3": "severe"
+      "4": "critical"
+
+missing_values:
+  - ""
+  - "UNK"
+  - "UNKNOWN"
+  - "?"
+  - "NA"

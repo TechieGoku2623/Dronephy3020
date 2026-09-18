@@ -1,0 +1,51 @@
+# County Central Lab — HL7-derived export with US date formats and verbose labels.
+source_system: county_central_lab
+description: >
+  Central laboratory CSV export. Uses verbose clinical column headers,
+  MM/DD/YYYY collection dates, and free-text disease/severity labels that
+  must be mapped to canonical controlled vocabularies.
+
+columns:
+  case_id:
+    source: "Accession Number"
+  report_date:
+    source: "Specimen Collection Date"
+    date_formats:
+      - "%m/%d/%Y"
+      - "%m/%d/%y"
+  zip_code:
+    source: "Patient ZIP Code"
+  condition_category:
+    source: "Disease Category"
+    value_map:
+      "Influenza": "respiratory"
+      "COVID-19": "respiratory"
+      "RSV": "respiratory"
+      "Norovirus": "gastrointestinal"
+      "Salmonella": "gastrointestinal"
+      "West Nile": "vector_borne"
+      "Measles": "vaccine_preventable"
+      "Other": "other"
+  age_bracket:
+    source: "Age Band"
+    value_map:
+      "Under 5": "0-4"
+      "5 to 17": "5-17"
+      "18 to 49": "18-49"
+      "50 to 64": "50-64"
+      "65 and older": "65+"
+  severity:
+    source: "Clinical Severity"
+    value_map:
+      "Mild": "mild"
+      "Moderate": "moderate"
+      "Severe": "severe"
+      "Critical / ICU": "critical"
+
+missing_values:
+  - ""
+  - "NA"
+  - "N/A"
+  - "NULL"
+  - "-"
+  - "."

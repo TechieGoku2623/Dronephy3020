@@ -1,0 +1,28 @@
+# Community Clinic Network — EHR extract with ISO dates and snake_case headers.
+source_system: community_clinic_ehr
+description: >
+  Multi-clinic EHR extract. Column names are snake_case and close to canonical.
+  Dates are ISO-8601 (YYYY-MM-DD). Categorical values are already canonical.
+  ZIP may include ZIP+4 which is truncated to 5 digits during mapping.
+
+columns:
+  case_id:
+    source: "case_id"
+  report_date:
+    source: "encounter_date"
+    date_formats:
+      - "%Y-%m-%d"
+  zip_code:
+    source: "patient_zip"
+  condition_category:
+    source: "condition_category"
+  age_bracket:
+    source: "age_bracket"
+  severity:
+    source: "severity"
+
+missing_values:
+  - ""
+  - "null"
+  - "NULL"
+  - "NA"
